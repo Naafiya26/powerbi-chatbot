@@ -12,7 +12,6 @@ def is_safe_sql(query: str) -> bool:
     return bool(re.match(r"^(select|with)\b", q, re.I)) and ";" not in q and not BLOCKED.search(q)
 
 def run_sql(query: str):
-    """Run ONE read-only DuckDB SELECT query against the view v_sales and return rows."""
     if not is_safe_sql(query):
         return "Blocked: only a single SELECT query is allowed."
     try:
