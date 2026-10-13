@@ -1,7 +1,7 @@
 import streamlit as st
 from src.llm import new_chat
 
-st.set_page_config(page_title="Sales Assistant", page_icon="📊")
+st.set_page_config(page_title="Sales Assistant")
 st.title("Sales Assistant")
 st.caption("Ask about top products, stores, trends and forecasts.")
 

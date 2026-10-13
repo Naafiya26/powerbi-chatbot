@@ -22,8 +22,6 @@ def run_sql(query: str):
 
 def forecast(metric: str = "SalesAmount", months: int = 3,
              ProductName: str = "", StoreKey: int = "", CountryName: str = ""):
-    """Forecast monthly totals of a metric for the next N months.
-    Optionally filter by product_name, store_name or region (leave empty for all)."""
     if metric not in FORECAST_METRICS:
         return f"metric must be one of {sorted(FORECAST_METRICS)}"
     months = max(1, min(int(months), 12))
