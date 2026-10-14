@@ -13,6 +13,8 @@ BUSINESS DEFINITIONS (use exactly):
 - Revenue = SUM(SalesAmount)
 - TOTAL_COST = SUM(CostAmount)
 - GROSS_PROFIT = Revenue - TOTAL_COST
+- TOTAL ORDERS = COUNT(DISTINCT OrderKey)
+- LINE ITEMS = COUNT(*)
 - "Top N" = GROUP BY the entity, ORDER BY the metric DESC, LIMIT N
 - If the user doesn't say a time period, use all available data and say so.
 
