@@ -14,4 +14,8 @@ for f in sorted(RAW.iterdir()):
 
 con.execute((ROOT / "sql" / "v_sales.sql").read_text())
 print("View v_sales created:", con.execute("SELECT COUNT(*) FROM v_sales").fetchone()[0], "rows")
+
+
+con.execute((ROOT / "sql" / "v_stores.sql").read_text())
+print("v_stores:", con.execute("SELECT COUNT(*) FROM v_stores").fetchone()[0], "rows")
 con.close()
