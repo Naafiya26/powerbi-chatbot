@@ -76,6 +76,8 @@ PAGES = {
     "store_insights": ["total_stores", "open_stores", "closed_stores", "total_store_area"],
 }
 
+UNITS = {"Total Store Area": " m²"}  
+
 def _norm(s):
     return "".join(ch for ch in str(s).lower() if ch.isalnum())
 
@@ -108,8 +110,8 @@ def _resolve(col, view, value):
     for v in vals:
         if str(v).lower() == str(value).lower():
             return v
-    raise ValueError(f"'{value}' is not a valid value for {col}. Valid values include: "
-                     f"{sorted(map(str, vals))[:25]}")
+    raise ValueError(f"No match found for '{value}'. "
+                f"Available options include: {sorted(map(str, vals))[:25]}")
 
 def _where(view, filters):
     cols = FILTER_COLS if view == SALES_VIEW else STORE_FILTER_COLS
@@ -128,22 +130,49 @@ def _where(view, filters):
     return clause, params, applied, ignored
 
 def _scope(applied):
-    parts = [f"Year {applied['year']}" if "year" in applied else "All years"]
-    others = [f"{k.replace('_', ' ').title()}: {applied[k]}"
-              for k in ("country", "customer_country", "continent", "category", "subcategory") if k in applied]
-    parts.append(", ".join(others) if others else "no other filters")
-    return " | ".join(parts)
-    
+    parts = []
+    if "country" in applied:          parts.append(str(applied["country"]))
+    if "customer_country" in applied: parts.append(f"customers in {applied['customer_country']}")
+    if "continent" in applied:        parts.append(str(applied["continent"]))
+    if "category" in applied:         parts.append(f"{applied['category']} category")
+    if "subcategory" in applied:      parts.append(f"{applied['subcategory']} sub-category")
+    if "year" in applied:             parts.append(str(applied["year"]))
+    return ", ".join(parts)          
+
+def _dress(text, prefix="", unit=""):
+    neg = text.startswith("-")
+    return f"{'-' if neg else ''}{prefix}{text.lstrip('-')}{unit}"
 
 def _pack(spec, value, applied, ignored, note=""):
     value = None if value is None else float(value)
-    display, exact, scope = fmt(value, spec["fmt"]), _exact(value, spec["fmt"]), _scope(applied)
-    answer = f"{spec['label']}: {display} (exact: {exact}) | {scope}"
+    kind = spec["fmt"]
+    prefix = "$" if kind == "money" else ""
+    unit = UNITS.get(spec["label"], "")
+    display, exact = fmt(value, kind), _exact(value, kind)
+    scope = _scope(applied)
+
+    if value is None:
+        value_text = "Not available"
+    else:
+        value_text = _dress(display, prefix, unit)
+        same = exact.replace(",", "") == display.replace(",", "")
+        if not same and not (kind == "pct" and value == 0):
+            value_text += f" ({_dress(exact, prefix, unit)})"
+
+    extras = []
     if ignored:
-        answer += f" | filters not applicable to this KPI: {', '.join(ignored)}"
+        names = ", ".join(i.replace("_", " ") for i in ignored)
+        extras.append(f"The {names} filter does not apply to this measure.")
     if note:
-        answer += f" | NOTE: {note}"
-    return {"kpi": spec["label"], "display": display, "exact": exact, "scope": scope, "answer": answer}
+        extras.append(note)
+
+    title = f"{spec['label']} – {scope}" if scope else spec["label"]
+    answer = f"**{title}:** {value_text}"
+    if extras:
+        answer += ". " + " ".join(extras)
+
+    return {"kpi": spec["label"], "display": display, "exact": exact, "scope": scope,
+            "value_text": value_text, "note": " ".join(extras), "answer": answer}
 
 def _sum_sales(filters):
     clause, params, applied, _ = _where(SALES_VIEW, filters)
@@ -152,15 +181,15 @@ def _sum_sales(filters):
 
 def _yoy(spec, filters):
     if not filters.get("year"):
-        return _pack(spec, 0.0, {}, [],
-                     "No year selected; the dashboard shows 0.0% in this case. Ask for a specific year to see real growth.")
+        return _pack(spec, 0.0, {}, [], "Select a specific year to see year-over-year growth.")
     cur, applied = _sum_sales(filters)
+    msg = "Growth cannot be calculated because there is no data for the previous year."
     try:
         prev, _ = _sum_sales({**filters, "year": int(filters["year"]) - 1})
     except ValueError:
-        return _pack(spec, None, applied, [], "No data for the previous year, so growth cannot be calculated.")
+        return _pack(spec, None, applied, [], msg)
     if not prev:
-        return _pack(spec, None, applied, [], "No data for the previous year, so growth cannot be calculated.")
+        return _pack(spec, None, applied, [], msg)
     return _pack(spec, (cur - prev) / prev, applied, [])
 
 def get_kpi(kpi: str, year: int = 0, country: str = "", continent: str = "",
@@ -184,9 +213,16 @@ def get_page_kpis(page: str, year: int = 0, country: str = "", continent: str = 
                   category: str = "", subcategory: str = "", customer_country: str = "") -> dict:
     p = PAGE_ALIASES.get(_norm(page))
     if p is None:
-        return {"error": f"Unknown page. Choose one of {list(PAGES)}"}
-    out = []
+        return {"error": f"Unknown page. Choose one of {[x.replace('_', ' ').title() for x in PAGES]}"}
+    rows, notes, scope = [], [], ""
     for k in PAGES[p]:
-        r = get_kpi(k, year, country, continent, category, subcategory)
-        out.append(r.get("answer", r.get("error")))
-    return {"page": p, "answers": out}
+        r = get_kpi(k, year, country, continent, category, subcategory, customer_country)
+        if "error" in r:
+            return r
+        scope = r["scope"]
+        rows.append(f"| {r['kpi']} | {r['value_text']} |")
+        if r.get("note"):
+            notes.append(r["note"])
+    title = p.replace("_", " ").title() + (f" – {scope}" if scope else "")
+    table = "| Metric | Value |\n|---|---:|\n" + "\n".join(rows)
+    return {"title": title, "table": table, "notes": list(dict.fromkeys(notes))}

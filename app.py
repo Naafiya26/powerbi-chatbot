@@ -3,7 +3,7 @@ from src.llm import new_chat
 
 st.set_page_config(page_title="Sales Assistant")
 st.title("Sales Assistant")
-st.caption("Ask about top products, stores, trends and forecasts.")
+st.caption("Ask about sales, products, customers, stores and forecasts.")
 
 if "chat" not in st.session_state:
     st.session_state.chat = new_chat()
@@ -30,9 +30,13 @@ if q:
     st.chat_message("user").write(q)
     with st.chat_message("assistant"):
         with st.spinner("Analyzing..."):
-            try:
-                ans = st.session_state.chat.send_message(q).text
-            except Exception as e:
-                ans = f"Sorry, something went wrong: {e}"
+                try:
+                    ans = st.session_state.chat.send_message(q).text
+                except Exception as e:
+                    print("ERROR:", e)          
+                    if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                        ans = "We are experiencing high demand at the moment. Please try again in a minute."
+                    else:
+                        ans = "I'm sorry, I couldn't complete that request. Please try again or rephrase your question."
         st.write(ans)
     st.session_state.history += [("user", q), ("assistant", ans)]
